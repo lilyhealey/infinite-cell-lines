@@ -158,6 +158,7 @@ function dataToParagraphs(data) {
       par3: par3
     });
   }
+  return parGroups;
 }
 
 /**
@@ -218,96 +219,88 @@ var LINE_4_STYLE = doc.paragraphStyles.item('space between');
 // make the initial text frame
 var currentPage = doc.pages.firstItem();
 var textFrame = makeTextFrame(currentPage);
+var story = textFrame.parentStory;
 
-for (var i = 0; i < data.length; i++) {
+function addNewTextFrame() {
 
-  var age = data[i].age;
-  var population = data[i].population;
-  var sex = data[i].sex;
-  var disease = data[i].disease;
-  var name = data[i].name;
-  var synonyms = data[i].synonyms;
-  var tissueOfOrigin = data[i].tissueOfOrigin;
-
-  var line1 = '';
-  var line2 = '';
-  var line3 = '';
-
-  var numLinesToCheck = 1;
-  var useLine2 = true;
-
-  // compute line 1
-  if (age || population || sex) {
-
-    numLinesToCheck++;
-
-    line1 += age;
-
-    if (age && population) {
-      line1 += ' '
-    }
-
-    line1 += population;
-
-    if (population && sex || age && sex) {
-      line1 += ' ';
-    }
-
-    line1 += sex;
+  // add a new page if necessary
+  var lastPage = doc.pages.lastItem();
+  if (currentPage == lastPage) {
+    currentPage = doc.pages.add();
   } else {
-    line1 = null;
+    currentPage = lastPage;
   }
 
-  // compute line 2
-  if (disease) {
-    numLinesToCheck++;
-    line2 += 'with ' + disease;
-  } else {
-    line2 = null;
-    useLine2 = false;
-  }
+  // add a new text frame
+  var nextTextFrame = makeTextFrame(currentPage);
+  textFrame.nextTextFrame = nextTextFrame;
+  parInsertionPoint.contents = SpecialCharacters.FRAME_BREAK;
+  parInsertionPoint.appliedParagraphStyle = LINE_4_STYLE;
+  textFrame = nextTextFrame;
 
-  // compute line 3
-  if (name || synonyms || tissueOfOrigin) {
+}
 
-    numLinesToCheck++;
+for (var i = 0; i < parGroups.length; i++) {
 
-    line3 += name;
+  var par1 = parGroups[i].par1;
+  var par2 = parGroups[i].par2;
+  var par3 = parGroups[i].par3;
 
-    if (name && synonyms) {
-      line3 += '; ';
-    }
+  var numLinesToCheck = 0;
+  var numParsToAdd = 0;
+  var usePar2 = true;
 
-    line3 += synonyms;
+  // add paragraph 1 to text frame (if it exists)
+  if (par1) {
+    var insertionPoint = story.insertionPoints.lastItem();
+    var numLinesOld = story.insertionPoints.count() == 1 
+      ? 0
+      : story.lines.count();
 
-    if (synonyms && tissueOfOrigin || name && tissueOfOrigin) {
-      line3 += '; ';
-    }
-
-    line3 += tissueOfOrigin;
-  } else {
-    line3 = null;
-  }
-
-  // add line 1 to text frame (if it exists)
-  if (line1) {
-    var insertionPoint = textFrame.insertionPoints.lastItem();
-    insertionPoint.contents += line1 + '\r';
+    // add the text and style it
+    insertionPoint.contents += par1 + '\r';
     insertionPoint.appliedParagraphStyle = LINE_1_STYLE;
+
+    // figure out how many lines we've added
+    var numLinesNew = story.lines.count();
+    numLinesToCheck += numLinesNew - numLinesOld;
+    numParsToAdd++;
   }
 
-  // add line 2 to text frame (if it exists)
-  if (line2) {
-    var insertionPoint = textFrame.insertionPoints.lastItem();
-    insertionPoint.contents += line2 + '\r';
+  // add paragraph 2 to text frame (if it exists)
+  if (par2) {
+    var insertionPoint = story.insertionPoints.lastItem();
+    var numLinesOld = story.insertionPoints.count() == 1 
+      ? 0
+      : story.lines.count();
+
+    // add the text and style it
+    insertionPoint.contents += par2 + '\r';
     insertionPoint.appliedParagraphStyle = LINE_2_STYLE;
+
+    // figure out how many lines we've added
+    var numLinesNew = story.lines.count();
+    numLinesToCheck += numLinesNew - numLinesOld;
+    numParsToAdd++;
+  } else {
+    usePar2 = false;
   }
 
-  // add line 3 to text frame (if it exists)
-  if (line3) {
-    var insertionPoint = textFrame.insertionPoints.lastItem();
-    insertionPoint.contents += line3 + '\r';
+  // add paragraph 3 to text frame (if it exists)
+  if (par3) {
+    var insertionPoint = story.insertionPoints.lastItem();
+    var numLinesOld = story.insertionPoints.count() == 1 
+      ? 0
+      : story.lines.count();
+
+    // add the text and style it
+    insertionPoint.contents += par3 + '\r';
     insertionPoint.appliedParagraphStyle = LINE_3_STYLE;
+
+    // figure out how many lines we've added
+    var numLinesNew = story.lines.count();
+    numLinesToCheck += numLinesNew - numLinesOld;
+    numParsToAdd++;
   }
 
   // for (var j = 0; j < textFrame.lines.length; j++) {
@@ -325,15 +318,18 @@ for (var i = 0; i < data.length; i++) {
   //   }
   // }
 
-  var lines = textFrame.lines;
+  var lines = story.lines;
+  var firstAddedPar = story.paragraphs[story.paragraphs.count() - numParsToAdd];
+  var parInsertionPoint = firstAddedPar.insertionPoints[0];
+
   for (var j = 1; j <= numLinesToCheck; j++) {
     var index = lines.length - j;
     var line = lines[index];
-    if (useLine2) {
+    if (usePar2) {
       if (line.appliedParagraphStyle == LINE_2_STYLE) {
         var contents = line.contents;
         while (true) {
-          if (contents != textFrame.lines[index].contents) {
+          if (contents != story.lines[index].contents) {
             line.textStyleRanges[0].pointSize -= POINT_INCREMENT;
             lines[index-1].textStyleRanges[0].pointSize = line.textStyleRanges[0].pointSize;
             break;
@@ -348,7 +344,7 @@ for (var i = 0; i < data.length; i++) {
       if (line.appliedParagraphStyle == LINE_1_STYLE) {
         var contents = line.contents;
         while (true) {
-          if (contents != textFrame.lines[index].contents) {
+          if (contents != story.lines[index].contents) {
             line.textStyleRanges[0].pointSize -= POINT_INCREMENT;
             break;
           }
@@ -361,30 +357,50 @@ for (var i = 0; i < data.length; i++) {
     }
   }
 
-  var insertionPoint = textFrame.insertionPoints.lastItem();
-  insertionPoint.contents += '\r';
-  // insertionPoint.appliedParagraphStyle = 'space between';
-  insertionPoint.appliedParagraphStyle = LINE_4_STYLE;
-  try {
-    boop(insertionPoint.endBaseline);
-  } catch (err) {
-    boop('oops');
-  }
 
-  if (currentPage.bounds[2] - currentPage.marginPreferences.bottom - insertionPoint.endBaseline < 300) {
-    var lastPage = doc.pages.lastItem();
-    if (currentPage == lastPage) {
-      currentPage = doc.pages.add();
-      boop('making a new page');
-    } else {
-      currentPage = lastPage;
-    }
+  var lastInsertionPoint = story.insertionPoints.lastItem();
+  lastInsertionPoint.contents += '\r';
+  lastInsertionPoint.appliedParagraphStyle = LINE_4_STYLE;
 
-    textFrame = makeTextFrame(currentPage);
+  if (textFrame.overflows) {
+
+    // // add a new page if necessary
+    // var lastPage = doc.pages.lastItem();
+    // if (currentPage == lastPage) {
+    //   currentPage = doc.pages.add();
+    // } else {
+    //   currentPage = lastPage;
+    // }
+
+    // // add a new text frame
     // var nextTextFrame = makeTextFrame(currentPage);
     // textFrame.nextTextFrame = nextTextFrame;
-    // var iPoint = textFrame.insertionPoints.lastItem();
-    // iPoint.contents = SpecialCharacters.FRAME_BREAK;
+    // parInsertionPoint.contents = SpecialCharacters.FRAME_BREAK;
     // textFrame = nextTextFrame;
+    addNewTextFrame();
   }
+
+  try {
+    boop(lastInsertionPoint.endBaseline);
+  } catch (err) {
+    boop('oops');
+    boop(textFrame.insertionPoints.count());
+  }
+
+  // if (currentPage.bounds[2] - currentPage.marginPreferences.bottom - lastInsertionPoint.endBaseline < 300) {
+  //   var lastPage = doc.pages.lastItem();
+  //   if (currentPage == lastPage) {
+  //     currentPage = doc.pages.add();
+  //     boop('making a new page');
+  //   } else {
+  //     currentPage = lastPage;
+  //   }
+
+  //   textFrame = makeTextFrame(currentPage);
+  //   // var nextTextFrame = makeTextFrame(currentPage);
+  //   // textFrame.nextTextFrame = nextTextFrame;
+  //   // var iPoint = textFrame.insertionPoints.lastItem();
+  //   // iPoint.contents = SpecialCharacters.FRAME_BREAK;
+  //   // textFrame = nextTextFrame;
+  // }
 }
