@@ -5,10 +5,15 @@
 // needs to be in same folder as script
 var TEMPLATE_FILE = 'template.indt';
 var DATA_FILE = 'data.tsv';
-var DATA_LIMIT = 100;
+var DATA_LIMIT = 200;
 var POINT_INCREMENT = 0.25;
 var MAX_POINT_SIZE = 48;
 
+/**
+ * Logs a string to ~/Desktop/Logs/indesign_log.txt
+ * 
+ * @param {string} s - the string to log
+ */
 function boop(s) {
 
   var now = new Date();
@@ -27,14 +32,10 @@ function boop(s) {
   logFile.open('a');
   logFile.writeln(output);
   logFile.close();
-
 }
 
 function getScriptFolder() {
-
-  var scriptFile = app.activeScript;
-  return scriptFile.parent.fsName;
-
+  return app.activeScript.parent.fsName;
 }
 
 function getTemplateFile() {
@@ -47,6 +48,12 @@ function getDataFile() {
   return new File(dataPath);
 }
 
+/**
+ * Reads tab-separated values into a javascript object.
+ * 
+ * @param {File} dataFile - the file with tsv data
+ * @returns{Array[Object]}
+ */
 function readData(dataFile) {
 
   var data = [];
@@ -93,6 +100,7 @@ function dataToParagraphs(data) {
   var parGroups = [];
 
   for (var i = 0; i < data.length; i++) {
+
     var age = data[i].age;
     var population = data[i].population;
     var sex = data[i].sex;
@@ -105,7 +113,7 @@ function dataToParagraphs(data) {
     var par2 = '';
     var par3 = '';
 
-      // compute par 1
+    // compute par 1
     if (age || population || sex) {
 
       par1 += age;
@@ -158,6 +166,7 @@ function dataToParagraphs(data) {
       par3: par3
     });
   }
+
   return parGroups;
 }
 
@@ -236,6 +245,7 @@ function addNewTextFrame() {
   textFrame.nextTextFrame = nextTextFrame;
   parInsertionPoint.contents = SpecialCharacters.FRAME_BREAK;
   parInsertionPoint.appliedParagraphStyle = LINE_4_STYLE;
+  textFrame.paragraphs.previousItem(textFrame.paragraphs.lastItem()).remove();
   textFrame = nextTextFrame;
 
 }
@@ -303,21 +313,6 @@ for (var i = 0; i < parGroups.length; i++) {
     numParsToAdd++;
   }
 
-  // for (var j = 0; j < textFrame.lines.length; j++) {
-  //   var line = textFrame.lines[j];
-  //   if (line.appliedParagraphStyle == doc.paragraphStyles.item('disease')) {
-  //     var contents = line.contents;
-  //     for (var k = 0; k < 100; k++) {
-  //       if (contents != textFrame.lines[j].contents) {
-  //         textFrame.lines[j].textStyleRanges[0].pointSize -= POINT_INCREMENT;
-  //         textFrame.lines[j-1].textStyleRanges[0].pointSize = textFrame.lines[j].textStyleRanges[0].pointSize;
-  //         break;
-  //       }
-  //       textFrame.lines[j].textStyleRanges[0].pointSize += POINT_INCREMENT;
-  //     }
-  //   }
-  // }
-
   var lines = story.lines;
   var firstAddedPar = story.paragraphs[story.paragraphs.count() - numParsToAdd];
   var parInsertionPoint = firstAddedPar.insertionPoints[0];
@@ -357,50 +352,16 @@ for (var i = 0; i < parGroups.length; i++) {
     }
   }
 
+  if (textFrame.overflows) {
+    addNewTextFrame();
+  }
 
   var lastInsertionPoint = story.insertionPoints.lastItem();
   lastInsertionPoint.contents += '\r';
   lastInsertionPoint.appliedParagraphStyle = LINE_4_STYLE;
 
   if (textFrame.overflows) {
-
-    // // add a new page if necessary
-    // var lastPage = doc.pages.lastItem();
-    // if (currentPage == lastPage) {
-    //   currentPage = doc.pages.add();
-    // } else {
-    //   currentPage = lastPage;
-    // }
-
-    // // add a new text frame
-    // var nextTextFrame = makeTextFrame(currentPage);
-    // textFrame.nextTextFrame = nextTextFrame;
-    // parInsertionPoint.contents = SpecialCharacters.FRAME_BREAK;
-    // textFrame = nextTextFrame;
     addNewTextFrame();
   }
 
-  try {
-    boop(lastInsertionPoint.endBaseline);
-  } catch (err) {
-    boop('oops');
-    boop(textFrame.insertionPoints.count());
-  }
-
-  // if (currentPage.bounds[2] - currentPage.marginPreferences.bottom - lastInsertionPoint.endBaseline < 300) {
-  //   var lastPage = doc.pages.lastItem();
-  //   if (currentPage == lastPage) {
-  //     currentPage = doc.pages.add();
-  //     boop('making a new page');
-  //   } else {
-  //     currentPage = lastPage;
-  //   }
-
-  //   textFrame = makeTextFrame(currentPage);
-  //   // var nextTextFrame = makeTextFrame(currentPage);
-  //   // textFrame.nextTextFrame = nextTextFrame;
-  //   // var iPoint = textFrame.insertionPoints.lastItem();
-  //   // iPoint.contents = SpecialCharacters.FRAME_BREAK;
-  //   // textFrame = nextTextFrame;
-  // }
 }
