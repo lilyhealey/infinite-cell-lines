@@ -6,6 +6,7 @@
 var TEMPLATE_FILE = 'template.indt';
 var DATA_FILE = 'data.tsv';
 var DATA_LIMIT = 200;
+// var DATA_LIMIT = 10;
 var POINT_INCREMENT = 0.25;
 var MAX_POINT_SIZE = 48;
 
@@ -243,9 +244,13 @@ function addNewTextFrame() {
   // add a new text frame
   var nextTextFrame = makeTextFrame(currentPage);
   textFrame.nextTextFrame = nextTextFrame;
-  parInsertionPoint.contents = SpecialCharacters.FRAME_BREAK;
-  parInsertionPoint.appliedParagraphStyle = LINE_4_STYLE;
-  textFrame.paragraphs.previousItem(textFrame.paragraphs.lastItem()).remove();
+  // parInsertionPoint.contents = SpecialCharacters.FRAME_BREAK;
+  // parInsertionPoint.appliedParagraphStyle = LINE_4_STYLE;
+  // var emptyPar = textFrame.paragraphs.previousItem(textFrame.paragraphs.lastItem());
+  // if (!(/\w/.test(emptyPar.contents))) {
+  //   emptyPar.remove();
+  // }
+
   textFrame = nextTextFrame;
 
 }
@@ -256,41 +261,30 @@ for (var i = 0; i < parGroups.length; i++) {
   var par2 = parGroups[i].par2;
   var par3 = parGroups[i].par3;
 
-  var numLinesToCheck = 0;
   var numParsToAdd = 0;
   var usePar2 = true;
 
   // add paragraph 1 to text frame (if it exists)
   if (par1) {
-    var insertionPoint = story.insertionPoints.lastItem();
-    var numLinesOld = story.insertionPoints.count() == 1 
-      ? 0
-      : story.lines.count();
-
+    
     // add the text and style it
+    var insertionPoint = story.insertionPoints.lastItem();
     insertionPoint.contents += par1 + '\r';
     insertionPoint.appliedParagraphStyle = LINE_1_STYLE;
 
-    // figure out how many lines we've added
-    var numLinesNew = story.lines.count();
-    numLinesToCheck += numLinesNew - numLinesOld;
+    // make sure to check this paragraph
     numParsToAdd++;
   }
 
   // add paragraph 2 to text frame (if it exists)
   if (par2) {
-    var insertionPoint = story.insertionPoints.lastItem();
-    var numLinesOld = story.insertionPoints.count() == 1 
-      ? 0
-      : story.lines.count();
 
     // add the text and style it
+    var insertionPoint = story.insertionPoints.lastItem();
     insertionPoint.contents += par2 + '\r';
     insertionPoint.appliedParagraphStyle = LINE_2_STYLE;
 
     // figure out how many lines we've added
-    var numLinesNew = story.lines.count();
-    numLinesToCheck += numLinesNew - numLinesOld;
     numParsToAdd++;
   } else {
     usePar2 = false;
@@ -298,58 +292,67 @@ for (var i = 0; i < parGroups.length; i++) {
 
   // add paragraph 3 to text frame (if it exists)
   if (par3) {
-    var insertionPoint = story.insertionPoints.lastItem();
-    var numLinesOld = story.insertionPoints.count() == 1 
-      ? 0
-      : story.lines.count();
-
+    
     // add the text and style it
+    var insertionPoint = story.insertionPoints.lastItem();
     insertionPoint.contents += par3 + '\r';
     insertionPoint.appliedParagraphStyle = LINE_3_STYLE;
 
     // figure out how many lines we've added
-    var numLinesNew = story.lines.count();
-    numLinesToCheck += numLinesNew - numLinesOld;
     numParsToAdd++;
   }
 
-  var lines = story.lines;
+  var pars = story.paragraphs;
   var firstAddedPar = story.paragraphs[story.paragraphs.count() - numParsToAdd];
   var parInsertionPoint = firstAddedPar.insertionPoints[0];
 
-  for (var j = 1; j <= numLinesToCheck; j++) {
-    var index = lines.length - j;
-    var line = lines[index];
+  for (var j = 1; j <= numParsToAdd; j++) {
+
+    var index;
+    var par;
+
+    if (textFrame.overflows) {
+      addNewTextFrame();
+      index = story.paragraphs.length - j - 1;
+    } else {
+      index = story.paragraphs.length - j;
+    }
+
+    par = story.paragraphs[index];
+
+    boop(par.lines.count() + ' - ' + par.contents);
+
     if (usePar2) {
-      if (line.appliedParagraphStyle == LINE_2_STYLE) {
-        var contents = line.contents;
+      if (par.appliedParagraphStyle == LINE_2_STYLE) {
         while (true) {
-          if (contents != story.lines[index].contents) {
-            line.textStyleRanges[0].pointSize -= POINT_INCREMENT;
-            lines[index-1].textStyleRanges[0].pointSize = line.textStyleRanges[0].pointSize;
+          if (par.lines.count() > 1) {
+            par.textStyleRanges[0].pointSize -= POINT_INCREMENT;
+            pars[index - 1].textStyleRanges[0].pointSize = par.textStyleRanges[0].pointSize;
             break;
-          }
-          line.textStyleRanges[0].pointSize += POINT_INCREMENT;
-          if (line.textStyleRanges[0].pointSize >= MAX_POINT_SIZE) {
-            break;
+          } else {
+            par.textStyleRanges[0].pointSize += POINT_INCREMENT;
+            if (par.textStyleRanges[0].pointSize >= MAX_POINT_SIZE) {
+              break;
+            }
           }
         }
       }
     } else {
-      if (line.appliedParagraphStyle == LINE_1_STYLE) {
-        var contents = line.contents;
+      if (par.appliedParagraphStyle == LINE_1_STYLE) {
         while (true) {
-          if (contents != story.lines[index].contents) {
-            line.textStyleRanges[0].pointSize -= POINT_INCREMENT;
+          if (par.lines.count() > 1) {
+            par.textStyleRanges[0].pointSize -= POINT_INCREMENT;
             break;
           }
-          line.textStyleRanges[0].pointSize += POINT_INCREMENT;
-          if (line.textStyleRanges[0].pointSize >= MAX_POINT_SIZE) {
+          par.textStyleRanges[0].pointSize += POINT_INCREMENT;
+          if (par.textStyleRanges[0].pointSize >= MAX_POINT_SIZE) {
             break;
           }
         }
       }
     }
+
+    boop(par.lines.count() + ' - ' + par.contents);
   }
 
   if (textFrame.overflows) {
