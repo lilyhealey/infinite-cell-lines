@@ -1,14 +1,25 @@
 // ***************************************************************************
-// infinite-cell-lines.js
+// import-and-resize.js
 // ***************************************************************************
 
-// needs to be in same folder as script
+// these two files need to be in the same folder as the script
 var TEMPLATE_FILE = 'template.indt';
 var DATA_FILE = 'data.tsv';
-var DATA_LIMIT = 200;
-// var DATA_LIMIT = 10;
-var POINT_INCREMENT = 0.25;
+
+// limit the number of rows of data to read (for testing); set to null to read
+// all data
+var DATA_LIMIT = 500;
+
+// resizing point increment; the smaller this number, the more precise the
+// justification will be, but the slower the script will run
+var POINT_INCREMENT = 1;
+
+// maximum point size when resizing
 var MAX_POINT_SIZE = 48;
+
+// not currently used (set minimum via the paragraph style in the template
+// instead)
+var MIN_POINT_SIZE = 12;
 
 /**
  * Logs a string to ~/Desktop/Logs/indesign_log.txt
@@ -19,7 +30,6 @@ function boop(s) {
 
   var now = new Date();
   var output = now.toLocaleString() + ': ' + s;
-  // var output = s;
   var logFolder = Folder(Folder.desktop.fsName + '/Logs');
 
   if (!logFolder.exists) {
@@ -96,6 +106,11 @@ function readData(dataFile) {
   return data;
 }
 
+/**
+ * Converts data to paragraphs.
+ * 
+ * @param {*} data 
+ */
 function dataToParagraphs(data) {
 
   var parGroups = [];
@@ -221,10 +236,10 @@ doc.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.POINTS;
 doc.viewPreferences.verticalMeasurementUnits = MeasurementUnits.POINTS;
 
 // get paragraph styles we're going to use
-var LINE_1_STYLE = doc.paragraphStyles.item('age-population-sex');
-var LINE_2_STYLE = doc.paragraphStyles.item('disease');
-var LINE_3_STYLE = doc.paragraphStyles.item('names');
-var LINE_4_STYLE = doc.paragraphStyles.item('space between');
+var PAR_1_STYLE = doc.paragraphStyles.item('age-population-sex');
+var PAR_2_STYLE = doc.paragraphStyles.item('disease');
+var PAR_3_STYLE = doc.paragraphStyles.item('names');
+var PAR_4_STYLE = doc.paragraphStyles.item('space between');
 
 // make the initial text frame
 var currentPage = doc.pages.firstItem();
@@ -241,28 +256,25 @@ function addNewTextFrame() {
     currentPage = lastPage;
   }
 
-  // add a new text frame
+  // add a new text frame and thread it to the current one
   var nextTextFrame = makeTextFrame(currentPage);
   textFrame.nextTextFrame = nextTextFrame;
-  // parInsertionPoint.contents = SpecialCharacters.FRAME_BREAK;
-  // parInsertionPoint.appliedParagraphStyle = LINE_4_STYLE;
-  // var emptyPar = textFrame.paragraphs.previousItem(textFrame.paragraphs.lastItem());
-  // if (!(/\w/.test(emptyPar.contents))) {
-  //   emptyPar.remove();
-  // }
-
   textFrame = nextTextFrame;
 
 }
 
 for (var i = 0; i < parGroups.length; i++) {
 
+  // {age} {population} {sex}
   var par1 = parGroups[i].par1;
+
+  // {disease}
   var par2 = parGroups[i].par2;
+
+  // {name}; {synonyms}; {tissueOfOrigin}
   var par3 = parGroups[i].par3;
 
   var numParsToAdd = 0;
-  var usePar2 = true;
 
   // add paragraph 1 to text frame (if it exists)
   if (par1) {
@@ -270,7 +282,7 @@ for (var i = 0; i < parGroups.length; i++) {
     // add the text and style it
     var insertionPoint = story.insertionPoints.lastItem();
     insertionPoint.contents += par1 + '\r';
-    insertionPoint.appliedParagraphStyle = LINE_1_STYLE;
+    insertionPoint.appliedParagraphStyle = PAR_1_STYLE;
 
     // make sure to check this paragraph
     numParsToAdd++;
@@ -282,12 +294,10 @@ for (var i = 0; i < parGroups.length; i++) {
     // add the text and style it
     var insertionPoint = story.insertionPoints.lastItem();
     insertionPoint.contents += par2 + '\r';
-    insertionPoint.appliedParagraphStyle = LINE_2_STYLE;
+    insertionPoint.appliedParagraphStyle = PAR_2_STYLE;
 
-    // figure out how many lines we've added
+    // make sure to check this paragraph
     numParsToAdd++;
-  } else {
-    usePar2 = false;
   }
 
   // add paragraph 3 to text frame (if it exists)
@@ -296,9 +306,9 @@ for (var i = 0; i < parGroups.length; i++) {
     // add the text and style it
     var insertionPoint = story.insertionPoints.lastItem();
     insertionPoint.contents += par3 + '\r';
-    insertionPoint.appliedParagraphStyle = LINE_3_STYLE;
+    insertionPoint.appliedParagraphStyle = PAR_3_STYLE;
 
-    // figure out how many lines we've added
+    // make sure to check this paragraph
     numParsToAdd++;
   }
 
@@ -309,8 +319,6 @@ for (var i = 0; i < parGroups.length; i++) {
   for (var j = 1; j <= numParsToAdd; j++) {
 
     var index;
-    var par;
-
     if (textFrame.overflows) {
       addNewTextFrame();
       index = story.paragraphs.length - j - 1;
@@ -318,50 +326,95 @@ for (var i = 0; i < parGroups.length; i++) {
       index = story.paragraphs.length - j;
     }
 
-    par = story.paragraphs[index];
+    var par = story.paragraphs[index];
+    var parTSR = par.textStyleRanges[0];
+    var prevPar = index > 1 ? story.paragraphs.previousItem(par) : null;
+    var prevParTSR = prevPar ? prevPar.textStyleRanges[0] : null;
 
-    boop(par.lines.count() + ' - ' + par.contents);
+    // if there is a disease paragraph, use it for sizing; otherwise, use
+    // demographic paragraph
+    if (par2) {
 
-    if (usePar2) {
-      if (par.appliedParagraphStyle == LINE_2_STYLE) {
+      // if this paragraph we're checking is the disease paragraph, resize it
+      if (par.appliedParagraphStyle == PAR_2_STYLE) {
+
+        // increase the type size by POINT_INCREMENT until the paragraph spans
+        // more than one line
         while (true) {
+
           if (par.lines.count() > 1) {
-            par.textStyleRanges[0].pointSize -= POINT_INCREMENT;
-            pars[index - 1].textStyleRanges[0].pointSize = par.textStyleRanges[0].pointSize;
+
+            // decrease the paragraph by POINT_INCREMENT if it is not the
+            // minimmum
+            if (parTSR.pointSize > parseInt(PAR_2_STYLE.pointSize)) {
+              parTSR.pointSize -= POINT_INCREMENT;
+            }
+
+            // resize the previous paragraph, if it is demographic info
+            if (prevPar && prevPar.appliedParagraphStyle == PAR_1_STYLE) {
+              prevParTSR.pointSize = parTSR.pointSize;
+            }
+
             break;
+
           } else {
-            par.textStyleRanges[0].pointSize += POINT_INCREMENT;
-            if (par.textStyleRanges[0].pointSize >= MAX_POINT_SIZE) {
+
+            parTSR.pointSize += POINT_INCREMENT;
+
+            if (parTSR.pointSize >= MAX_POINT_SIZE) {
+
+              // resize the previous paragraph, if necessary
+              if (prevPar && prevPar.appliedParagraphStyle == PAR_1_STYLE) {
+                prevParTSR.pointSize = parTSR.pointSize;
+              }
+
               break;
             }
           }
         }
+
+        // if, by resizing the disease paragraph, we've pushed the demographic
+        // paragraph to two lines, reduce the size of the demographic paragraph
+        // until it fits one line
+        if (
+          prevPar &&
+          prevPar.appliedParagraphStyle == PAR_1_STYLE &&
+          prevPar.lines.count() > 1
+        ) {
+          while (true) {
+            if (prevPar.lines.count() == 1) {
+              parTSR.pointSize = prevParTSR.pointSize;
+              break;
+            }
+            prevParTSR.pointSize -= POINT_INCREMENT;
+          }
+        }
       }
     } else {
-      if (par.appliedParagraphStyle == LINE_1_STYLE) {
+      // no disease paragraph; use demographic paragraph for sizing
+      if (par.appliedParagraphStyle == PAR_1_STYLE) {
         while (true) {
           if (par.lines.count() > 1) {
-            par.textStyleRanges[0].pointSize -= POINT_INCREMENT;
+            parTSR.pointSize -= POINT_INCREMENT;
             break;
           }
-          par.textStyleRanges[0].pointSize += POINT_INCREMENT;
-          if (par.textStyleRanges[0].pointSize >= MAX_POINT_SIZE) {
+          parTSR.pointSize += POINT_INCREMENT;
+          if (parTSR.pointSize >= MAX_POINT_SIZE) {
             break;
           }
         }
       }
     }
-
-    boop(par.lines.count() + ' - ' + par.contents);
   }
 
   if (textFrame.overflows) {
     addNewTextFrame();
   }
 
+  // add a spacing paragraph
   var lastInsertionPoint = story.insertionPoints.lastItem();
   lastInsertionPoint.contents += '\r';
-  lastInsertionPoint.appliedParagraphStyle = LINE_4_STYLE;
+  lastInsertionPoint.appliedParagraphStyle = PAR_4_STYLE;
 
   if (textFrame.overflows) {
     addNewTextFrame();
