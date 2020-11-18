@@ -8,11 +8,11 @@ var DATA_FILE = 'data.tsv';
 
 // limit the number of rows of data to read (for testing); set to null to read
 // all data
-var DATA_LIMIT = 500;
+var DATA_LIMIT = 50;
 
 // resizing point increment; the smaller this number, the more precise the
 // justification will be, but the slower the script will run
-var POINT_INCREMENT = .25;
+var POINT_INCREMENT = 1;
 
 // maximum point size when resizing
 var MAX_POINT_SIZE = 48;
@@ -288,61 +288,43 @@ for (var i = 0; i < parGroups.length; i++) {
   // {name}; {synonyms}; {tissueOfOrigin}
   var par3 = parGroups[i].par3;
 
-  var numParsToAdd = 0;
-
   // add paragraph 1 to text frame (if it exists)
   if (par1) {
-    
     // add the text and style it
     var insertionPoint = story.insertionPoints.lastItem();
     insertionPoint.contents += par1 + '\r';
     insertionPoint.appliedParagraphStyle = PAR_1_STYLE;
-
-    // make sure to check this paragraph
-    numParsToAdd++;
   }
 
   // add paragraph 2 to text frame (if it exists)
   if (par2) {
-
     // add the text and style it
     var insertionPoint = story.insertionPoints.lastItem();
     insertionPoint.contents += par2 + '\r';
     insertionPoint.appliedParagraphStyle = PAR_2_STYLE;
-
-    // make sure to check this paragraph
-    numParsToAdd++;
   }
 
   // add paragraph 3 to text frame (if it exists)
   if (par3) {
-    
     // add the text and style it
     var insertionPoint = story.insertionPoints.lastItem();
     insertionPoint.contents += par3 + '\r';
     insertionPoint.appliedParagraphStyle = PAR_3_STYLE;
-
-    // make sure to check this paragraph
-    numParsToAdd++;
   }
 
-  var pars = story.paragraphs;
+  // resize the paragraphs as necessary
+
   var numPars = story.paragraphs.count();
-  // var firstAddedPar = story.paragraphs[story.paragraphs.count() - numParsToAdd];
-  // var parInsertionPoint = firstAddedPar.insertionPoints[0];
-  var firstAddedPar = story.paragraphs.firstItem();
-  var parInsertionPoint = firstAddedPar.insertionPoints[0];
 
   for (var j = 0; j < numPars; j++) {
 
-    var index = j;
     if (textFrame.overflows) {
       addNewTextFrame();
     }
 
-    var par = story.paragraphs[index];
+    var par = story.paragraphs[j];
     var parTSR = par.textStyleRanges[0];
-    var prevPar = index > 0 ? story.paragraphs.previousItem(par) : null;
+    var prevPar = j > 0 ? story.paragraphs.previousItem(par) : null;
     var prevParTSR = prevPar ? prevPar.textStyleRanges[0] : null;
 
     // if there is a disease paragraph, use it for sizing; otherwise, use
@@ -425,12 +407,8 @@ for (var i = 0; i < parGroups.length; i++) {
     addNewTextFrame();
   }
 
-  if (textFrame.overflows) {
-    addNewTextFrame();
-  }
-
+  // resize the current text frame to be only as tall as it needs to be
   var lastLine = textFrame.lines.lastItem();
-
   var gb = textFrame.geometricBounds;
   textFrame.geometricBounds = [
     gb[0],
@@ -439,9 +417,14 @@ for (var i = 0; i < parGroups.length; i++) {
     gb[3]
   ];
 
+  // add a new text frame for the next row
   textFrame = makeTextFrame(
     currentPage, 
     lastLine.endBaseline + SPACE_BETWEEN_FRAMES
   );
   story = textFrame.parentStory;
+
 }
+
+// remove the extra text frame created in the last iteration of the loop
+textFrame.remove();
