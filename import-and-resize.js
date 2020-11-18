@@ -19,7 +19,7 @@ var MAX_POINT_SIZE = 48;
 
 // not currently used (set minimum via the paragraph style in the template
 // instead)
-var MIN_POINT_SIZE = 12;
+var MIN_POINT_SIZE = 16;
 
 // space between text frames, in points
 var SPACE_BETWEEN_FRAMES = 15;
