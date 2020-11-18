@@ -8,7 +8,7 @@ var DATA_FILE = 'data.tsv';
 
 // limit the number of rows of data to read (for testing); set to null to read
 // all data
-var DATA_LIMIT = 50;
+var DATA_LIMIT = 500;
 
 // resizing point increment; the smaller this number, the more precise the
 // justification will be, but the slower the script will run
