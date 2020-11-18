@@ -12,7 +12,7 @@ var DATA_LIMIT = 500;
 
 // resizing point increment; the smaller this number, the more precise the
 // justification will be, but the slower the script will run
-var POINT_INCREMENT = 1;
+var POINT_INCREMENT = .25;
 
 // maximum point size when resizing
 var MAX_POINT_SIZE = 48;
@@ -20,6 +20,9 @@ var MAX_POINT_SIZE = 48;
 // not currently used (set minimum via the paragraph style in the template
 // instead)
 var MIN_POINT_SIZE = 12;
+
+// space between text frames, in points
+var SPACE_BETWEEN_FRAMES = 15;
 
 /**
  * Logs a string to ~/Desktop/Logs/indesign_log.txt
@@ -192,9 +195,11 @@ function dataToParagraphs(data) {
  * @param {Page} page - the page to make the text frame on
  * @returns {TextFrame} - the created text frame
  */
-function makeTextFrame(page) {
+function makeTextFrame(page, y1) {
 
-  var y1 = page.marginPreferences.top;
+  if (!y1) {
+    y1 = page.marginPreferences.top;
+  }
   var y2 = page.bounds[2] - page.marginPreferences.bottom;
 
   // figure out the left and right bounds of the box
@@ -211,7 +216,7 @@ function makeTextFrame(page) {
     x2 = page.bounds[3] - page.marginPreferences.right;
   }
 
-  return page.textFrames.add(
+  var textFrame = page.textFrames.add(
     undefined,
     undefined,
     undefined,
@@ -221,6 +226,12 @@ function makeTextFrame(page) {
       ]
     }
   );
+
+  // make sure the top of the caps of the first line align with the top of the
+  // text frame
+  textFrame.textFramePreferences.firstBaselineOffset = FirstBaseline.CAP_HEIGHT;
+
+  return textFrame;
 }
 
 // read in the data
@@ -256,11 +267,14 @@ function addNewTextFrame() {
     currentPage = lastPage;
   }
 
-  // add a new text frame and thread it to the current one
+  // this is a little hacky, but it works:
+  // add a new text frame to the next page
   var nextTextFrame = makeTextFrame(currentPage);
-  textFrame.nextTextFrame = nextTextFrame;
-  textFrame = nextTextFrame;
-
+  // move the current text frame to the new page
+  textFrame.move(currentPage);
+  textFrame.geometricBounds = nextTextFrame.geometricBounds;
+  // remove the interim text frame
+  nextTextFrame.remove();
 }
 
 for (var i = 0; i < parGroups.length; i++) {
@@ -313,22 +327,22 @@ for (var i = 0; i < parGroups.length; i++) {
   }
 
   var pars = story.paragraphs;
-  var firstAddedPar = story.paragraphs[story.paragraphs.count() - numParsToAdd];
+  var numPars = story.paragraphs.count();
+  // var firstAddedPar = story.paragraphs[story.paragraphs.count() - numParsToAdd];
+  // var parInsertionPoint = firstAddedPar.insertionPoints[0];
+  var firstAddedPar = story.paragraphs.firstItem();
   var parInsertionPoint = firstAddedPar.insertionPoints[0];
 
-  for (var j = 1; j <= numParsToAdd; j++) {
+  for (var j = 0; j < numPars; j++) {
 
-    var index;
+    var index = j;
     if (textFrame.overflows) {
       addNewTextFrame();
-      index = story.paragraphs.length - j - 1;
-    } else {
-      index = story.paragraphs.length - j;
     }
 
     var par = story.paragraphs[index];
     var parTSR = par.textStyleRanges[0];
-    var prevPar = index > 1 ? story.paragraphs.previousItem(par) : null;
+    var prevPar = index > 0 ? story.paragraphs.previousItem(par) : null;
     var prevParTSR = prevPar ? prevPar.textStyleRanges[0] : null;
 
     // if there is a disease paragraph, use it for sizing; otherwise, use
@@ -411,13 +425,23 @@ for (var i = 0; i < parGroups.length; i++) {
     addNewTextFrame();
   }
 
-  // add a spacing paragraph
-  var lastInsertionPoint = story.insertionPoints.lastItem();
-  lastInsertionPoint.contents += '\r';
-  lastInsertionPoint.appliedParagraphStyle = PAR_4_STYLE;
-
   if (textFrame.overflows) {
     addNewTextFrame();
   }
 
+  var lastLine = textFrame.lines.lastItem();
+
+  var gb = textFrame.geometricBounds;
+  textFrame.geometricBounds = [
+    gb[0],
+    gb[1],
+    lastLine.endBaseline,
+    gb[3]
+  ];
+
+  textFrame = makeTextFrame(
+    currentPage, 
+    lastLine.endBaseline + SPACE_BETWEEN_FRAMES
+  );
+  story = textFrame.parentStory;
 }
