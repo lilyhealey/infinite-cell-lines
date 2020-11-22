@@ -12,7 +12,7 @@ var DATA_LIMIT = 500;
 
 // resizing point increment; the smaller this number, the more precise the
 // justification will be, but the slower the script will run
-var POINT_INCREMENT = 1;
+var POINT_INCREMENT = .25;
 
 // maximum point size when resizing
 var MAX_POINT_SIZE = 48;
@@ -312,96 +312,149 @@ for (var i = 0; i < parGroups.length; i++) {
     insertionPoint.appliedParagraphStyle = PAR_3_STYLE;
   }
 
-  // resize the paragraphs as necessary
+  if (textFrame.overflows) {
+    addNewTextFrame();
+  }
 
+  // resize the paragraphs as necessary
   var numPars = story.paragraphs.count();
 
-  for (var j = 0; j < numPars; j++) {
+  // figure out the number of lines in the first two paragraphs
+  var par1NumLines = 0;
+  var par2NumLines = 0;
+  var longestLine = story.lines.firstItem();
+  var allLines = [];
 
-    if (textFrame.overflows) {
-      addNewTextFrame();
+  for (var j = 0; j < story.lines.count(); j++) {
+
+    var line = story.lines[j];
+
+    if (line.appliedParagraphStyle == PAR_1_STYLE) {
+      allLines.push(line);
+      if (line.endHorizontalOffset > longestLine.endHorizontalOffset) {
+        longestLine = line;
+      }
+      par1NumLines++;
+      continue;
+    } else if (line.appliedParagraphStyle == PAR_2_STYLE) {
+      allLines.push(line);
+      if (line.endHorizontalOffset > longestLine.endHorizontalOffset) {
+        longestLine = line;
+      }
+      par2NumLines++;
+    }
+  }
+
+  if (par1NumLines > 1 || par2NumLines > 1) {
+
+    var lineTSR = longestLine.textStyleRanges[0];
+    var contents = longestLine.contents;
+
+    while (longestLine.lines.count() < 2 && !textFrame.overflows) {
+
+      lineTSR.pointSize += POINT_INCREMENT;
+
+      if (lineTSR.pointSize > MAX_POINT_SIZE) {
+        break;
+      }
+
+    }
+    lineTSR.pointSize -= POINT_INCREMENT;
+
+    for (var k = 0; k < allLines.length; k++) {
+      var line = allLines[k];
+      line.textStyleRanges[0].pointSize  = lineTSR.pointSize;
     }
 
-    var par = story.paragraphs[j];
-    var parTSR = par.textStyleRanges[0];
-    var prevPar = j > 0 ? story.paragraphs.previousItem(par) : null;
-    var prevParTSR = prevPar ? prevPar.textStyleRanges[0] : null;
-
-    // if there is a disease paragraph, use it for sizing; otherwise, use
-    // demographic paragraph
-    if (par2) {
-
-      // if this paragraph we're checking is the disease paragraph, resize it
-      if (par.appliedParagraphStyle == PAR_2_STYLE) {
-
-        // increase the type size by POINT_INCREMENT until the paragraph spans
-        // more than one line
-        while (true) {
-
-          if (par.lines.count() > 1) {
-
-            // decrease the paragraph by POINT_INCREMENT if it is not the
-            // minimmum
-            if (parTSR.pointSize > parseInt(PAR_2_STYLE.pointSize)) {
-              parTSR.pointSize -= POINT_INCREMENT;
-            }
-
-            // resize the previous paragraph, if it is demographic info
-            if (prevPar && prevPar.appliedParagraphStyle == PAR_1_STYLE) {
-              prevParTSR.pointSize = parTSR.pointSize;
-            }
-
-            break;
-
-          } else {
-
-            parTSR.pointSize += POINT_INCREMENT;
-
-            if (parTSR.pointSize >= MAX_POINT_SIZE) {
-
-              // resize the previous paragraph, if necessary
+  } else {
+    for (var j = 0; j < numPars; j++) {
+  
+      // if (textFrame.overflows) {
+      //   addNewTextFrame();
+      // }
+  
+      var par = story.paragraphs[j];
+      var parTSR = par.textStyleRanges[0];
+      var prevPar = j > 0 ? story.paragraphs.previousItem(par) : null;
+      var prevParTSR = prevPar ? prevPar.textStyleRanges[0] : null;
+  
+      // if there is a disease paragraph, use it for sizing; otherwise, use
+      // demographic paragraph
+      if (par2) {
+  
+        // if this paragraph we're checking is the disease paragraph, resize it
+        if (par.appliedParagraphStyle == PAR_2_STYLE) {
+  
+          // increase the type size by POINT_INCREMENT until the paragraph spans
+          // more than one line
+          while (true) {
+  
+            if (par.lines.count() > 1) {
+  
+              // decrease the paragraph by POINT_INCREMENT if it is not the
+              // minimmum
+              if (parTSR.pointSize > parseInt(PAR_2_STYLE.pointSize)) {
+                parTSR.pointSize -= POINT_INCREMENT;
+              }
+  
+              // resize the previous paragraph, if it is demographic info
               if (prevPar && prevPar.appliedParagraphStyle == PAR_1_STYLE) {
                 prevParTSR.pointSize = parTSR.pointSize;
               }
-
+  
               break;
+  
+            } else {
+  
+              parTSR.pointSize += POINT_INCREMENT;
+  
+              if (parTSR.pointSize >= MAX_POINT_SIZE) {
+  
+                // resize the previous paragraph, if necessary
+                if (prevPar && prevPar.appliedParagraphStyle == PAR_1_STYLE) {
+                  prevParTSR.pointSize = parTSR.pointSize;
+                }
+  
+                break;
+              }
+            }
+          }
+  
+          // if, by resizing the disease paragraph, we've pushed the demographic
+          // paragraph to two lines, reduce the size of the demographic paragraph
+          // until it fits one line
+          if (
+            prevPar &&
+            prevPar.appliedParagraphStyle == PAR_1_STYLE &&
+            prevPar.lines.count() > 1
+          ) {
+            while (true) {
+              if (prevPar.lines.count() == 1) {
+                parTSR.pointSize = prevParTSR.pointSize;
+                break;
+              }
+              prevParTSR.pointSize -= POINT_INCREMENT;
             }
           }
         }
-
-        // if, by resizing the disease paragraph, we've pushed the demographic
-        // paragraph to two lines, reduce the size of the demographic paragraph
-        // until it fits one line
-        if (
-          prevPar &&
-          prevPar.appliedParagraphStyle == PAR_1_STYLE &&
-          prevPar.lines.count() > 1
-        ) {
+      } else {
+        // no disease paragraph; use demographic paragraph for sizing
+        if (par.appliedParagraphStyle == PAR_1_STYLE) {
           while (true) {
-            if (prevPar.lines.count() == 1) {
-              parTSR.pointSize = prevParTSR.pointSize;
+            if (par.lines.count() > 1) {
+              parTSR.pointSize -= POINT_INCREMENT;
               break;
             }
-            prevParTSR.pointSize -= POINT_INCREMENT;
-          }
-        }
-      }
-    } else {
-      // no disease paragraph; use demographic paragraph for sizing
-      if (par.appliedParagraphStyle == PAR_1_STYLE) {
-        while (true) {
-          if (par.lines.count() > 1) {
-            parTSR.pointSize -= POINT_INCREMENT;
-            break;
-          }
-          parTSR.pointSize += POINT_INCREMENT;
-          if (parTSR.pointSize >= MAX_POINT_SIZE) {
-            break;
+            parTSR.pointSize += POINT_INCREMENT;
+            if (parTSR.pointSize >= MAX_POINT_SIZE) {
+              break;
+            }
           }
         }
       }
     }
   }
+
 
   if (textFrame.overflows) {
     addNewTextFrame();
