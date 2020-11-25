@@ -8,11 +8,12 @@ var DATA_FILE = 'data.tsv';
 
 // limit the number of rows of data to read (for testing); set to null to read
 // all data
-var DATA_LIMIT = 500;
+var DATA_LIMIT = null;
 
 // resizing point increment; the smaller this number, the more precise the
 // justification will be, but the slower the script will run
-var POINT_INCREMENT = 1;
+var ROUGH_POINT_INCREMENT = 1;
+var FINE_POINT_INCREMENT = 0.25;
 
 // maximum point size when resizing
 var MAX_POINT_SIZE = 48;
@@ -23,6 +24,8 @@ var MIN_POINT_SIZE = 16;
 
 // space between text frames, in points
 var SPACE_BETWEEN_FRAMES = 15;
+
+var PROGRESS_BAR_UPDATE_INTERVAL = 1000;
 
 /**
  * Logs a string to ~/Desktop/Logs/indesign_log.txt
@@ -60,6 +63,15 @@ function getTemplateFile() {
 function getDataFile() {
   var dataPath = getScriptFolder() + '/' + DATA_FILE;
   return new File(dataPath);
+}
+
+Line.prototype.isOverset = function () {
+  try {
+    this.endHorizontalOffset;
+  } catch (err) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -189,6 +201,28 @@ function dataToParagraphs(data) {
   return parGroups;
 }
 
+function createProgressBar(maxValue, progressBarWidth) {
+	progressWindow = new Window('window', 'adding text');
+  progressWindow.progressBar = progressWindow.add(
+    'progressbar',
+    [
+      12,
+      12,
+      progressBarWidth,
+      24
+    ],
+    0,
+    maxValue
+  );
+
+  progressWindow.show();
+
+}
+
+function updateProgressBar(value) {
+  progressWindow.progressBar.value = value;
+}
+
 /**
  * Make a text frame that fills the page margins.
  * 
@@ -241,6 +275,9 @@ var parGroups = dataToParagraphs(data);
 
 // open the template doc
 var doc = app.open(getTemplateFile());
+var initialRedrawPreference = app.scriptPreferences.enableRedraw;
+
+app.scriptPreferences.enableRedraw = false;
 
 // make sure we're doing everything in points
 doc.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.POINTS;
@@ -256,6 +293,8 @@ var PAR_4_STYLE = doc.paragraphStyles.item('space between');
 var currentPage = doc.pages.firstItem();
 var textFrame = makeTextFrame(currentPage);
 var story = textFrame.parentStory;
+
+createProgressBar(parGroups.length, 400);
 
 function addNewTextFrame() {
 
@@ -278,6 +317,10 @@ function addNewTextFrame() {
 }
 
 for (var i = 0; i < parGroups.length; i++) {
+
+  if (i % PROGRESS_BAR_UPDATE_INTERVAL == 0) {
+    updateProgressBar(i);
+  }
 
   // {age} {population} {sex}
   var par1 = parGroups[i].par1;
@@ -341,22 +384,45 @@ for (var i = 0; i < parGroups.length; i++) {
   // resize the longest line
   var lineTSR = longestLine.textStyleRanges[0];
   var contents = longestLine.contents;
+
   while (
-    longestLine.lines.count() < 2 && 
-    !textFrame.overflows &&
+    longestLine.lines.count() < 2 &&
+    !longestLine.isOverset() &&
+    // !textFrame.overflows &&
     lineTSR.pointSize <= MAX_POINT_SIZE
   ) {
-    lineTSR.pointSize += POINT_INCREMENT;
+    lineTSR.pointSize += ROUGH_POINT_INCREMENT;
 
     // if the longest line is only one word, adding a new text frame won't
     // solve the overflow problem, so don't
-    if (textFrame.overflows && longestLine.words.count() > 1) {
-      addNewTextFrame();
-    }
+    // if (textFrame.overflows && longestLine.words.count() > 1) {
+    //   addNewTextFrame();
+    // }
 
   }
 
-  lineTSR.pointSize -= POINT_INCREMENT;
+  while (
+    longestLine.lines.count() > 1 ||
+    longestLine.isOverset() ||
+    lineTSR.pointSize > MAX_POINT_SIZE
+  ) {
+    lineTSR.pointSize -= FINE_POINT_INCREMENT;
+  }
+
+  if (textFrame.overflows) {
+    addNewTextFrame();
+    while (
+      longestLine.lines.count() < 2 && 
+      lineTSR.pointSize <= MAX_POINT_SIZE
+    ) {
+      lineTSR.pointSize += ROUGH_POINT_INCREMENT;
+    }
+  
+    do {
+      lineTSR.pointSize -= FINE_POINT_INCREMENT;
+    } while (longestLine.lines.count() > 1 || lineTSR.pointSize > MAX_POINT_SIZE);
+  }
+
 
   // resize all of the relevant lines
   for (var j = 0; j < linesToResize.length; j++) {
@@ -389,3 +455,4 @@ for (var i = 0; i < parGroups.length; i++) {
 
 // remove the extra text frame created in the last iteration of the loop
 textFrame.remove();
+app.scriptPreferences.enableRedraw = initialRedrawPreference;
