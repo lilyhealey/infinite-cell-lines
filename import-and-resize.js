@@ -10,7 +10,7 @@ var OUT_FOLDER = 'out';
 // limit the number of rows of data to read (for testing); set to null to read
 // all data
 // var DATA_LIMIT = null;
-var DATA_LIMIT = 2000;
+var DATA_LIMIT = 5000;
 
 // resizing point increment; the smaller this number, the more precise the
 // justification will be, but the slower the script will run
@@ -27,7 +27,8 @@ var MIN_POINT_SIZE = 16;
 // space between text frames, in points
 var SPACE_BETWEEN_FRAMES = 15;
 
-var PROGRESS_BAR_UPDATE_INTERVAL = 10;
+// update the progress bar and save the file after adding this many rows
+var PROGRESS_BAR_UPDATE_INTERVAL = 1000;
 
 if (!String.prototype.padStart) {
 
@@ -435,22 +436,16 @@ for (var i = 0; i < parGroups.length; i++) {
   var lineTSR = longestLine.textStyleRanges[0];
   var contents = longestLine.contents;
 
+  // bump up the size
   while (
     longestLine.lines.count() < 2 &&
     !longestLine.isOverset() &&
-    // !textFrame.overflows &&
     lineTSR.pointSize <= MAX_POINT_SIZE
   ) {
     lineTSR.pointSize += ROUGH_POINT_INCREMENT;
-
-    // if the longest line is only one word, adding a new text frame won't
-    // solve the overflow problem, so don't
-    // if (textFrame.overflows && longestLine.words.count() > 1) {
-    //   addNewTextFrame();
-    // }
-
   }
 
+  // reduce it to be just right
   while (
     longestLine.lines.count() > 1 ||
     longestLine.isOverset() ||
@@ -460,17 +455,26 @@ for (var i = 0; i < parGroups.length; i++) {
   }
 
   if (textFrame.overflows) {
+
     addNewTextFrame();
+
+    // bump up the size
     while (
-      longestLine.lines.count() < 2 && 
+      longestLine.lines.count() < 2 &&
+      !longestLine.isOverset() &&
       lineTSR.pointSize <= MAX_POINT_SIZE
     ) {
       lineTSR.pointSize += ROUGH_POINT_INCREMENT;
     }
   
-    do {
+    // reduce it to be just right
+    while (
+      longestLine.lines.count() > 1 ||
+      longestLine.isOverset() ||
+      lineTSR.pointSize > MAX_POINT_SIZE
+    ) {
       lineTSR.pointSize -= FINE_POINT_INCREMENT;
-    } while (longestLine.lines.count() > 1 || lineTSR.pointSize > MAX_POINT_SIZE);
+    }
   }
 
 

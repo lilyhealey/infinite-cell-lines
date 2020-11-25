@@ -1,6 +1,7 @@
 # working assets
 received/
 delivered/
+out/
 
 # data files
 data.tsv
