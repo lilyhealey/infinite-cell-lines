@@ -5,10 +5,12 @@
 // these two files need to be in the same folder as the script
 var TEMPLATE_FILE = 'template.indt';
 var DATA_FILE = 'data.tsv';
+var OUT_FOLDER = 'out';
 
 // limit the number of rows of data to read (for testing); set to null to read
 // all data
-var DATA_LIMIT = null;
+// var DATA_LIMIT = null;
+var DATA_LIMIT = 2000;
 
 // resizing point increment; the smaller this number, the more precise the
 // justification will be, but the slower the script will run
@@ -25,7 +27,26 @@ var MIN_POINT_SIZE = 16;
 // space between text frames, in points
 var SPACE_BETWEEN_FRAMES = 15;
 
-var PROGRESS_BAR_UPDATE_INTERVAL = 1000;
+var PROGRESS_BAR_UPDATE_INTERVAL = 10;
+
+if (!String.prototype.padStart) {
+
+  String.prototype.padStart = function padStart(targetLength, padString) {
+    //floor if number or convert non-number to 0;
+    targetLength = targetLength >> 0;
+    padString = String(typeof padString !== 'undefined' ? padString : ' ');
+    if (this.length > targetLength) {
+      return String(this);
+    } else {
+      targetLength = targetLength - this.length;
+      if (targetLength > padString.length) {
+        //append to original to ensure we are longer than needed
+        padString += padString.repeat(targetLength / padString.length);
+      }
+      return padString.slice(0, targetLength) + String(this);
+    }
+  };
+}
 
 /**
  * Logs a string to ~/Desktop/Logs/indesign_log.txt
@@ -63,6 +84,33 @@ function getTemplateFile() {
 function getDataFile() {
   var dataPath = getScriptFolder() + '/' + DATA_FILE;
   return new File(dataPath);
+}
+
+function getOutFolder() {
+  var outFolderPath = getScriptFolder() + '/' + OUT_FOLDER;
+  var outFolder = Folder(outFolderPath);
+  if (!outFolder.exists) {
+    outFolder.create();
+  }
+  return outFolder;
+}
+
+function getOutFile() {
+  var now = new Date();
+  var yyyy = now.getFullYear();
+  var mm = (now.getMonth() + 1).toString().padStart(2, '0');
+  var dd = now.getDate().toString().padStart(2, '0');
+  var hh = now.getHours().toString().padStart(2, '0');
+  var min = now.getMinutes().toString().padStart(2, '0');
+  var timestamp = [
+    yyyy,
+    mm,
+    dd,
+    'T' + hh + min
+  ].join('-');
+
+  var outPath = getOutFolder().fsName + '/' + timestamp + '.indd';
+  return new File(outPath);
 }
 
 Line.prototype.isOverset = function () {
@@ -271,6 +319,7 @@ function makeTextFrame(page, y1) {
 // read in the data
 var tsvFile = getDataFile();
 var data = readData(tsvFile);
+var outFile = getOutFile();
 var parGroups = dataToParagraphs(data);
 
 // open the template doc
@@ -320,6 +369,7 @@ for (var i = 0; i < parGroups.length; i++) {
 
   if (i % PROGRESS_BAR_UPDATE_INTERVAL == 0) {
     updateProgressBar(i);
+    doc.save(outFile);
   }
 
   // {age} {population} {sex}
@@ -455,4 +505,5 @@ for (var i = 0; i < parGroups.length; i++) {
 
 // remove the extra text frame created in the last iteration of the loop
 textFrame.remove();
+doc.save(outFile);
 app.scriptPreferences.enableRedraw = initialRedrawPreference;
